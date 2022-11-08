@@ -23,14 +23,14 @@ verbose = True # set to true to print outcome of all matches and group tables in
 savePlots = True # plots saved in same directory
 
 # ************ Sim Set-up ***************
-print "loading data"
+print("loading data")
 teamdata = get_WorldCup2018_data()
 group_names = sorted(np.unique(teamdata['Group']))
 teamnames = list( teamdata['Country'].values )
 sims = []
 
 # ************ MAIN SIMULATIONS LOOP ***************
-print "starting sims: 0 sims done"
+print("starting sims: 0 sims done")
 for i in range(0,Nsims):
     # collect team data (needs to be redone in each loop of sim)
     teams = []
@@ -45,10 +45,10 @@ for i in range(0,Nsims):
     sims.append(copy.deepcopy(s))
 
     if i>0 and i % 1000 == 0: 
-        print "               %s sims done" % (i)
+        print("               %s sims done" % (i))
 
 # ************ Plots & Statistics ***************
-print "generating plots and statistics"
+print("generating plots and statistics")
 met.SimWinners(sims,teamnames,includeOdds=False, save=savePlots)
 met.makeProgressPlot( sims, teamnames, save=savePlots )
 met.ExpectedGroupFinishesPlot(sims,group_names, save=savePlots)
@@ -56,7 +56,7 @@ met.ExpectedGroupFinishesPlot(sims,group_names, save=savePlots)
 # Print some interesting tournament predictions
 met.simstats(sims)
 
-print "done"
+print("done")
 
 ## ************  USEFUL INFO ************  ##
 
