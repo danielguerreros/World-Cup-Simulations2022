@@ -8,7 +8,10 @@ World Cup match class. Simulates the individual matches.
 import scipy as scipy
 import scipy.stats
 import numpy as np
+import pandas as pd
+from statsmodels.iolib.smpickle import load_pickle
 
+modelo_poisson = load_pickle("Prediction Model/international_model.pickle")
 class WorldCupMatch(object):
     def __init__(self,team1,team2):
         self.played = False
@@ -63,27 +66,20 @@ class WorldCupMatch(object):
      
     
     def generate_result(self,stage,penalties=False,verbose=False):
-        # Does one team have home advantage (i.e. the host)?
-        if self.team1.host:
-            HA = self.eloHA
-        elif self.team2.host:
-            HA = -self.eloHA
-        else:
-            HA = 0.0
-        assert not (self.team1.host and self.team2.host)
+        
         # Elo differences, including home advantage effect
-        elo_diff = self.team1.elorank - self.team2.elorank + HA
-        # Select model & calculated Poisson means
-        if self.model=="Elo": 
-            mu1 = float(np.exp( self.const + elo_diff*self.xe/100 ))
-            mu2 = float(np.exp( self.const - elo_diff*self.xe/100 ))
+        elo_diff = self.team1.elorank - self.team2.elorank
+        
+        if self.model=="Elo":
+            mu1 =  modelo_poisson.predict(pd.DataFrame(data={'mov_score_for': self.team1.moving_for,  'mov_score_against': self.team1.moving_against,'mov_score_against_rival':self.team2.moving_against,'home':int(self.team1.host),"Elo_diff":self.team1.elorank - self.team2.elorank},index=[1])).values[0]
+            mu2 =  modelo_poisson.predict(pd.DataFrame(data={'mov_score_for': self.team2.moving_for,  'mov_score_against': self.team2.moving_against,'mov_score_against_rival':self.team1.moving_against,'home':int(self.team2.host),"Elo_diff":self.team2.elorank - self.team1.elorank},index=[1])).values[0]
         # Draw goals from Poisson distribution
         team1_goals = int(scipy.stats.poisson.rvs(mu1,size=1))
         team2_goals = int(scipy.stats.poisson.rvs(mu2,size=1))
         if verbose:
-            print "%s %d vs %d %s" % (self.team1.name, team1_goals, team2_goals, self.team2.name)
-            print "Mus: %1.1f, %1.1f" % (mu1,mu2)
-            print "Elos: %1.1f, %1.1f" % (self.team1.elorank,self.team2.elorank)
+            print("%s %d vs %d %s" % (self.team1.name, team1_goals, team2_goals, self.team2.name))
+            print( "Mus: %1.1f, %1.1f" % (mu1,mu2))
+            print("Elos: %1.1f, %1.1f" % (self.team1.elorank,self.team2.elorank))
         # Update group stats
         self.set_group_stats(team1_goals,team2_goals,stage)
         # Simulate penalty shoot-out if necessary
@@ -93,7 +89,7 @@ class WorldCupMatch(object):
         if self.run_hot:
             self.update_elo_scores_ELORATING( team1_goals-team2_goals, elo_diff)
         if verbose:
-            print "Elos: %1.1f, %1.1f" % (self.team1.elorank,self.team2.elorank)
+            print("Elos: %1.1f, %1.1f" % (self.team1.elorank,self.team2.elorank))
 
 
     def update_elo_scores_ELORATING(self, goal_diff, elo_diff):
@@ -113,18 +109,18 @@ class WorldCupMatch(object):
     def penalty_shootout(self, Ninit = 5):
         # generate 5 penalties each and check against skill
         self.penalties = True
-        team1_success = np.sum(np.random.uniform(size=Ninit)<=self.team1.penaltyskill)
-        team2_success = np.sum(np.random.uniform(size=Ninit)<=self.team2.penaltyskill)
+        team1_success = np.sum(np.random.uniform(size=Ninit))
+        team2_success = np.sum(np.random.uniform(size=Ninit))
         if team1_success > team2_success:
             self.winner = self.team1
         elif team1_success < team2_success:
             self.winner = self.team2
-        else: # determine winner based on relative penalty strenghts
-            high = self.team1.penaltyskill + self.team2.penaltyskill
-            if np.random.uniform(size=1,high=high)<self.team1.penaltyskill:
-                self.winner = self.team1
-            else:
-                self.winner = self.team2
+        #else: # determine winner based on relative penalty strenghts
+        #    high = self.team1.penaltyskill + self.team2.penaltyskill
+        #    if np.random.uniform(size=1,high=high)<self.team1.penaltyskill:
+        #        self.winner = self.team1
+        #    else:
+        #        self.winner = self.team2
 
 
     

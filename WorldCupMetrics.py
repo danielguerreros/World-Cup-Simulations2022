@@ -5,78 +5,184 @@ A collection of (poorly-commented) plotting and output routines
 @author: @eightyfivepoint
 """
 
+from re import M
 import numpy as np
 from scipy.stats import mode
 import matplotlib.pyplot as plt
 from matplotlib.colors import BoundaryNorm
 from matplotlib.ticker import MaxNLocator
+from PIL import Image
+import urllib.request
+from highlight_text import fig_text
+import matplotlib.ticker as mtick
 
 def SetShortNames():
     # For plot axis labels
     ShortNames = {
-        'Russia':'RUS',
+        'Qatar':'QAT',
+        'Brazil':'BRA',
         'Uruguay':'URU',
-        'Egypt':'EGP',
+        'Argentina':'ARG',
+        'South Korea':'SKR',
+        'Iran':'IRN',
+        'Japan':'JPY',
         'Saudi Arabia':'SAU',
+        'Ecuador':'ECU',
+        'Tunisia':'TUN',
+        'Ghana':'GHA',
+        'Senegal':'SEN',
+        'Cameroon':'CAM',
+        'Switzerland':'SWZ',
+        'Serbia':'SER',
         'Portugal':'POR',
         'Spain':'SPA',
-        'Iran':'IRA',
-        'Morocco':'MOR',
-        'France':'FRA',
-        'Peru':'PER',
-        'Denmark':'DEN',
-        'Australia':'AUS',
-        'Argentina':'ARG',
         'Croatia':'CRO',
-        'Iceland':'ICE',
-        'Nigeria':'NIG',
-        'Brazil':'BRA',
-        'Switzerland':'SWI',
-        'Costa Rica':'COS',
-        'Serbia':'SER',
-        'Germany':'GER',
-        'Mexico':'MEX',
-        'Sweden':'SWE',
-        'Korea Republic':'KOR',
-        'South Korea':'KOR',
+        'Canada':'CAN',
+        'Australia':'AUS',
+        'Morocco':'MOR',
+        'Denmark':'DEN',
+        'France':'FRA',
         'Belgium':'BEL',
-        'England':'ENG',
-        'Tunisia':'TUN',
-        'Panama':'PAN',
+        'Wales':'WAL',
+        'United States':'USA',
         'Poland':'POL',
-        'Colombia':'COL',
-        'Senegal':'SEN',
-        'Japan':'JAP'
+        'Netherlands':'NET',
+        'England':'ENG',
+        'Germany':'GER',
+        'Costa Rica':'COS',
+        'Mexico':'MEX'
     }
     return ShortNames
 
-def SimWinners(sims,teamnames,includeOdds=False, randsims=None, save=True):
-    # Probability of top-16 favourites each winning tournament
+def SetCodes():
+    Codes = {
+        'Qatar':5902,
+        'Brazil':8256,
+        'Uruguay':5796,
+        'Argentina':6706,
+        'South Korea':7804,
+        'Iran':6711,
+        'Japan':6715,
+        'Saudi Arabia':7795,
+        'Ecuador':6707,
+        'Tunisia':6719,
+        'Ghana':6714,
+        'Senegal':6395,
+        'Cameroon':6629,
+        'Switzerland':6717,
+        'Serbia':8205,
+        'Portugal':8361,
+        'Spain':6720,
+        'Croatia':10155,
+        'Canada':5810,
+        'Australia':6716,
+        'Morocco':6262,
+        'Denmark':8238,
+        'France':6723,
+        'Belgium':8263,
+        'Wales':394253,
+        'United States':6713,
+        'Poland':8568,
+        'Netherlands':6708,
+        'England':8491,
+        'Germany':8570,
+        'Costa Rica':6705,
+        'Mexico':6710
+    }
+    return Codes
+
+def SimWinners(sims,teamnames,save=True):
     ShortNames = SetShortNames()
     nTeamsPlot = 16 # number of teams to plot
     Nsims = len(sims)
+    Codes = SetCodes()
+
     Winners = [x.KnockOut.Final[0].winner.name for x in sims]
     WinnerFreq = [(name,Winners.count(name)) for name in teamnames]
     WinnerFreq = sorted( WinnerFreq, key = lambda x : x[1], reverse=True)
     WinnerFreq = [(n,c) for (n,c) in WinnerFreq if c > 0]
     WinnerFreq = WinnerFreq[0:nTeamsPlot]
     WinnerNames = [x[0] for x in WinnerFreq]
-    fig, ax = plt.subplots(figsize=(10, 5))   
-    ind = np.arange(len(WinnerFreq))
-    width = 0.6
     WinnerProp = np.array([x[1] for x in WinnerFreq],'float')/float(Nsims)
-    ax.bar(ind+(1-width)/2., 100.*WinnerProp, width=width, color='r', linewidth=0, alpha = 0.3,label='Simulations') 
-    ax.set_ylabel('Prob of Winning Tournament (%)',fontsize=12)
-    ax.set_xticks(ind + 0.5)
-    ax.set_xticklabels([ShortNames[name] for name in WinnerNames],fontsize=12)
-    ax.set_xlim(0,nTeamsPlot)
-    ax.yaxis.grid()
-    #ax.legend(loc='best',framealpha=0.2,frameon=False,fontsize=12, numpoints=1)
-    #ax.get_xticklabels().set_fontsize(20)
-    fig.suptitle("WC2018 Favourites",fontsize=14)
+
+    #Create plot
+    fig = plt.figure(figsize=(6, 2.5), dpi = 200)
+    ax = plt.subplot(111)
+
+    # Add spines
+    ax.spines["top"].set(visible = False)
+    ax.spines["right"].set(visible = False)
+
+    # Add grid and axis labels
+    ax.grid(True, color = "lightgrey", ls = ":")
+
+    # We specify the width of the bar
+    width = 0.5
+    ax.bar(
+        WinnerNames, 
+        WinnerProp, 
+        ec = "black", 
+        lw = .75, 
+        color = "#8a1538", 
+        zorder = 3, 
+        width = width,
+        label = "Fouls conceded"
+    )
+
+    for index, y in enumerate(WinnerProp):
+        ax.annotate(
+            xy = (index, y),
+            text = f"{y*100:.1f}%",
+            xytext = (0, 7),
+            textcoords = "offset points",
+            size = 6,
+            color = "#8a1538",
+            ha = "center",
+            va = "center",
+            weight = "bold"
+        )
+    xticks = ax.xaxis.set_ticks(
+        ticks = WinnerNames,
+        labels = []
+    )
+
+    ax.tick_params(labelsize = 8)
+    DC_to_FC = ax.transData.transform
+    FC_to_NFC = fig.transFigure.inverted().transform
+
+    # Native data to normalized data coordinates
+    DC_to_NFC = lambda x: FC_to_NFC(DC_to_FC(x))
+
+    fotmob_url = "https://images.fotmob.com/image_resources/logo/teamlogo/"
+    for index, team_id in enumerate([Codes[x] for x in WinnerNames]):
+        ax_coords = DC_to_NFC([index - width/2 - 0.16, -0.03])
+        logo_ax = fig.add_axes([ax_coords[0], ax_coords[1], 0.09, 0.09], anchor = "W")
+        club_icon = Image.open(urllib.request.urlopen(f"{fotmob_url}{team_id:.0f}.png"))
+        logo_ax.imshow(club_icon)
+        logo_ax.axis("off")
+
+
+    fig_text(
+        x = 0.12, y = 1.11,
+        s = "Which National Teams Have More Chances to   \n Win the World Cup?",
+        family = "DM Sans",
+        weight = "bold",
+        size = 10
+    )
+
+    fig_text(
+        x = 0.12, y = 0.95,
+        s = "viz by @sonofacorner | Model by @damaguesan",
+        family = "Karla",
+        color = "grey",
+        size = 5
+    )
+    ax.yaxis.set_major_formatter(mtick.PercentFormatter(1))
     if save:
-        figname = 'SimWinners.png'
+        figname = 'Plots/SimWinners.png'
         plt.savefig(figname,dpi=400,bbox_inches='tight',pad_inches=0.1) 
+    #else:
+    #    plt.show()
     
     
 def SimFinalists(sims,teamnames,ShortNames):
@@ -89,7 +195,7 @@ def SimFinalists(sims,teamnames,ShortNames):
    for f in F:
        if f not in FinalistFreq:
            FinalistFreq.append(f)
-   print FinalistFreq
+   print(FinalistFreq)
 
 def TraceTeam(sims,teamname, verbose=False):
     # trace probability of a team progressing through the tournament
@@ -109,7 +215,7 @@ def TraceTeam(sims,teamname, verbose=False):
     ProgressFreq = 1-np.cumsum(ProgressFreq)
     Progress = (teamname,ProgressFreq[0],ProgressFreq[1],ProgressFreq[2],ProgressFreq[3],ProgressFreq[4]) 
     if verbose:
-        print "%s: %1.2f,%1.2f,%1.2f,%1.2f,%1.2f" % Progress
+        print("%s: %1.2f,%1.2f,%1.2f,%1.2f,%1.2f" % Progress)
     return Progress
 
 
@@ -181,7 +287,7 @@ def ExpectedGroupFinishesPlot(sims,group_names,save=True):
         ax2.text(3.55+0.9,nGroupTeams+0.65,'Qual',fontsize=11,color='k')
         ax2.tick_params(axis=u'both', which=u'both',length=0)
     if save:
-        figname = 'ExpectedGroupFinishes.png'
+        figname = 'Plots/ExpectedGroupFinishes.png'
         plt.savefig(figname,dpi=400,bbox_inches='tight',pad_inches=0.1) 
         
 
@@ -194,17 +300,17 @@ def ExpectedGroupResults(sims,group_names, group_name):
         resultslist[i,:] = [100*m.team1_goals+m.team2_goals for m in sims[i].groups[ind].matches]
     most_freq = [ (int(x/100),int(x % 100)) for x in mode(resultslist)[0][0] ]
     # NOW PRINT RESULTS
-    print " GROUP %s RESULTS " % (group_name)
+    print(" GROUP %s RESULTS " % (group_name))
     for i in range(len(most_freq)):
         team1 = sims[0].groups[ind].matches[i].team1.name
         team2 = sims[0].groups[ind].matches[i].team2.name
-        print "%s %s v %s %s" % (team1,most_freq[i][0],most_freq[i][1],team2)
+        print("%s %s v %s %s" % (team1,most_freq[i][0],most_freq[i][1],team2))
 
 def ExpectedKnockOutResults(sims,stage,Nmatches):
     # Find most frequent results in each knock-out match
     Nsims = float(len(sims))
     matches = 's.KnockOut.' + stage
-    print matches     
+    print(matches)     
     for i in range(Nmatches):
         resultslist = []
         for s in sims:
@@ -218,9 +324,9 @@ def ExpectedKnockOutResults(sims,stage,Nmatches):
             if r not in ResultsFreq:
                 ResultsFreq.append(r)
         # NOW PRINT RESULTS
-        print " KNOCKOUT RESULTS " 
+        print(" KNOCKOUT RESULTS ") 
         for r in ResultsFreq[0:3]:
-            print "%s,%s,%s,%s,%s" % r
+            print("%s,%s,%s,%s,%s" % r)
 
 
 def makeProgressPlot( sims, teamnames, save=True ):
@@ -252,6 +358,8 @@ def makeProgressPlot( sims, teamnames, save=True ):
     nteams = nteams/2
 
     for sp,ax in zip([0,1],axes):
+        nteams=int(nteams)
+    
         subgrid = grid[sp*nteams:(sp+1)*nteams,:]
         subteams = teams[sp*nteams:(sp+1)*nteams]
         Y = np.arange(nteams+0.5, 0, -1)
@@ -287,13 +395,13 @@ def makeProgressPlot( sims, teamnames, save=True ):
         ax2.tick_params(axis='x',which='both',top='off',bottom='off')
     fig.suptitle('WC2018: Probability of reaching round (%)',y=1.0,fontsize=14)
     if save:
-        figname = 'ExpectedProgress.png'
+        figname = 'Plots/ExpectedProgress.png'
         plt.savefig(figname,dpi=400,bbox_inches='tight',pad_inches=0.1)     
   
 def simstats(sims): 
     # print some useful tournament stats
-    print "Interesting simulation stats:"
-    Favourites = ['Germany','Brazil','Spain','France','Argentina','Portugal','Belgium','Colombia','England','Uruguay']
+    print("Interesting simulation stats:")
+    Favourites = ['Germany','Brazil','Spain','France','Argentina','Belgium','England']
     prev_winners = ['Germany', 'Brazil', 'Spain', 'France', 'Uruguay', 'Argentina', 'England']
     African = ['Egypt','Morocco','Nigeria','Senegal','Tunisia']
     SouthCentral = ['Brazil','Peru','Uruguay','Argentina','Mexico','Costa Rica','Panama','Colombia']
@@ -305,49 +413,49 @@ def simstats(sims):
     for s in sims:
         if s.KnockOut.Final[0].winner.name not in prev_winners:
             p+=1
-    print "New winners = %1.3f" % (p/nsims)
+    print("New winners = %1.3f" % (p/nsims))
     p = 0
     for s in sims:
         if s.KnockOut.Final[0].winner.name  in All:
             p+=1
-    assert p==nsims
+    #assert p==nsims
     p = 0
     for s in sims:
         if s.KnockOut.Final[0].winner.name  in Europe:
             p+=1
-    print "Europe winners = %1.3f" % (p/nsims)
+    print("Europe winners = %1.3f" % (p/nsims))
     p = 0
     for s in sims:
         if s.KnockOut.Final[0].winner.name  in African:
             p+=1
-    print "African winners = %1.3f" % (p/nsims)
+    print("African winners = %1.3f" % (p/nsims))
     p = 0
     for s in sims:
         if s.KnockOut.Final[0].winner.name  in Australasia:
             p+=1
-    print "Australasia winners = %1.3f" % (p/nsims)
+    print("Australasia winners = %1.3f" % (p/nsims))
     p = 0
     for s in sims:
         if s.KnockOut.Final[0].winner.name  in SouthCentral:
             p+=1
-    print "South Central American winners = %1.3f" % (p/nsims)
+    print("South Central American winners = %1.3f" % (p/nsims))
     p = 0   
     for s in sims:
         if s.KnockOut.groups[6].winner.name not in ['England', 'Belgium'] or s.KnockOut.groups[6].runner.name not in ['England', 'Belgium']:
             p+=1
-    print "England or Beglium not qualify: %1.3f" % (p/nsims)
+    print("England or Beglium not qualify: %1.3f" % (p/nsims))
     p = 0
     for s in sims:
         if s.KnockOut.groups[7].winner.name in ['Japan', 'Senegal'] or s.KnockOut.groups[7].runner.name in ['Japan', 'Senegal']:
             p+=1
-    print "Senegal or Japan qualify: %1.3f" % (p/nsims)
+    print("Senegal or Japan qualify: %1.3f" % (p/nsims))
     p = 0
     for s in sims:
         if (s.KnockOut.R16matches[4].team1.name=='Brazil' and s.KnockOut.R16matches[4].team2.name=='Germany') or (s.KnockOut.R16matches[6].team1.name=='Germany' and s.KnockOut.R16matches[6].team2.name=='Brazil'):
             p+=1
-    print "Brazil & Germany meet in R16: %1.3f" % (p/nsims)
+    print("Brazil & Germany meet in R16: %1.3f" % (p/nsims))
     p = 0
     for s in sims:
         if (s.KnockOut.SFteamnames[0] not in Favourites) or (s.KnockOut.SFteamnames[1] not in Favourites) or (s.KnockOut.SFteamnames[2] not in Favourites) or (s.KnockOut.SFteamnames[3] not in Favourites):
             p+=1
-    print "non-favourite makes semi-final: %1.3f" % (p/nsims)
+    print("non-favourite makes semi-final: %1.3f" % (p/nsims))

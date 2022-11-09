@@ -11,22 +11,24 @@ from WorldCupSim import WorldCupSim
 import WorldCupMetrics as met
 import copy as copy
 import pandas as pd
+import random 
 
-def get_WorldCup2018_data():
-    teamdata = pd.read_csv('WorldCup2018_groups.csv')
+random.seed(40)
+def get_WorldCup2022_data():
+    teamdata = pd.read_excel('WorldCup2022_Teams.xlsx')
     return teamdata
                     
 # ************ Simulations Parameters ***************
-hostname = 'Russia'
-Nsims = 1000 # number of tournament simulations to run
-verbose = True # set to true to print outcome of all matches and group tables in each sim iteration
+hostname = 'Qatar'
+Nsims = 100 # number of tournament simulations to run
+verbose = False # set to true to print outcome of all matches and group tables in each sim iteration
 savePlots = True # plots saved in same directory
 
 # ************ Sim Set-up ***************
 print("loading data")
-teamdata = get_WorldCup2018_data()
+teamdata = get_WorldCup2022_data()
 group_names = sorted(np.unique(teamdata['Group']))
-teamnames = list( teamdata['Country'].values )
+teamnames = list( teamdata['Team'].values )
 sims = []
 
 # ************ MAIN SIMULATIONS LOOP ***************
@@ -35,7 +37,7 @@ for i in range(0,Nsims):
     # collect team data (needs to be redone in each loop of sim)
     teams = []
     for ix,row in teamdata.iterrows():
-        teams.append( WorldCupTeam( row['Group'],row['Country'],row['Elo_lag'],row['Seed'],row['PenaltySkill'],row['Dist_to_Moscow'],hostname) )
+        teams.append( WorldCupTeam( row['Group'],row['Team'],row['Elo'],hostname,row["Moving goals for"],row["Moving goals against"]) )
 
     # initialise simulation
     s = WorldCupSim(group_names,teams,verbose=verbose)
@@ -44,14 +46,14 @@ for i in range(0,Nsims):
     s.runsim() 
     sims.append(copy.deepcopy(s))
 
-    if i>0 and i % 1000 == 0: 
+    if i>0 and i % 5 == 0: 
         print("               %s sims done" % (i))
 
 # ************ Plots & Statistics ***************
 print("generating plots and statistics")
-met.SimWinners(sims,teamnames,includeOdds=False, save=savePlots)
-met.makeProgressPlot( sims, teamnames, save=savePlots )
+met.SimWinners(sims,teamnames, save=savePlots)
 met.ExpectedGroupFinishesPlot(sims,group_names, save=savePlots)
+met.makeProgressPlot( sims, teamnames, save=savePlots )
 
 # Print some interesting tournament predictions
 met.simstats(sims)

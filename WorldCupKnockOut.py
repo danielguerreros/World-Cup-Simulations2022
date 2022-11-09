@@ -86,12 +86,12 @@ class WorldCupKnockOut(object):
     
         
     def print_matches(self,matches):
-        print "***** KNOCKOUT GAMES ******"
+        print( "***** KNOCKOUT GAMES ******")
         for m in matches:
             if m.played:
                 if m.penalties:
-                    print m.__repr__() + " --->  %s wins on penalties." % (m.winner.name)
+                    print(m.__repr__() + " --->  %s wins on penalties." % (m.winner.name))
                 else:
-                    print m.__repr__() + " --->  %s wins." % (m.winner.name)
+                    print(m.__repr__() + " --->  %s wins." % (m.winner.name))
             else:
-                print m 
+                print(m)

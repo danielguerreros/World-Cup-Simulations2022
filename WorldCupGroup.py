@@ -36,8 +36,8 @@ class WorldCupGroup(object):
        
     def set_actual_result(self,matchnum,team1_goals,team2_goals):
         # functionality for using the actual result (during the tournament) rather than simulating matches
-        self.matches[matchnum].set_group_stats(team1_goals,team2_goals)
-        self.matches[matchnum].set_tournament_points('GRP')    
+        self.matches[matchnum].set_group_stats(team1_goals,team2_goals,'GRP')
+        #self.matches[matchnum].set_tournament_points('GRP')    
 
     def build_table(self): 
         # Sort on points, goal dif and then goals scored. Ties on all three not explicitly dealt with, sorry! (they're very rare)
@@ -47,15 +47,15 @@ class WorldCupGroup(object):
         
     def print_table(self): # print the group tables
         self.build_table()   
-        print "***** GROUP %s Table ******" % self.group_name
+        print("***** GROUP %s Table ******" % self.group_name)
         template = "{0:14}{1:3}{2:3}{3:3}{4:3}{5:3}"
-        print template.format("Team", " Pl", " GF", " GA", " GD", " Pt") # header
-        print '-'*29
+        print(template.format("Team", " Pl", " GF", " GA", " GD", " Pt")) # header
+        print('-'*29)
         for t in self.table:
             row = [t.group_matches,t.goals_for,t.goals_against,t.goal_dif,t.points]
-            print template.format( t.name, *row)
-        print '-'*29
+            print(template.format( t.name, *row))
+        print('-'*29)
             
     def print_matches(self):
         for m in self.matches:
-            print m
+            print(m)
