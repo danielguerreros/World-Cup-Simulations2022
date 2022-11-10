@@ -16,6 +16,15 @@ import urllib.request
 from highlight_text import fig_text
 import matplotlib.ticker as mtick
 
+import urllib.request
+import matplotlib
+import pandas as pd
+from matplotlib.colors import LinearSegmentedColormap
+from plottable import ColumnDefinition, Table
+from plottable.cmap import normed_cmap
+from plottable.formatters import decimal_to_percent
+from plottable.plots import circled_image # image
+
 def SetShortNames():
     # For plot axis labels
     ShortNames = {
@@ -82,12 +91,25 @@ def SetCodes():
         'Belgium':8263,
         'Wales':394253,
         'United States':6713,
+        'USA':6713,
         'Poland':8568,
         'Netherlands':6708,
         'England':8491,
         'Germany':8570,
         'Costa Rica':6705,
-        'Mexico':6710
+        'Mexico':6710,
+        'Sweden':8520,
+        'China':5822,
+        'Nigeria':6346,
+        'Scotland':8498,
+        'South Africa':6316,
+        'Thailand':5788,
+        'Jamaica':5806,
+        'Chile':9762,
+        'Italy':8204,
+        'New Zealand':5820,
+        'Norway':8492,
+        'Colombia':8258
     }
     return Codes
 
@@ -397,7 +419,184 @@ def makeProgressPlot( sims, teamnames, save=True ):
     if save:
         figname = 'Plots/ExpectedProgress.png'
         plt.savefig(figname,dpi=400,bbox_inches='tight',pad_inches=0.1)     
-  
+
+def TraceTeam_daniel(sims,teamname, verbose=False):
+    # trace probability of a team progressing through the tournament
+    Progress = []
+    Nsims = float(len(sims))
+    stages = ['GRP','R16','QF','SF','Final','Winner']
+    for s in sims:
+        p = 0
+        if teamname in s.KnockOut.R16teamnames: p += 1
+        if teamname in s.KnockOut.QFteamnames: p += 1
+        if teamname in s.KnockOut.SFteamnames: p += 1
+        if teamname in s.KnockOut.Finalteamnames: p += 1
+        if teamname == s.KnockOut.Final[0].winner.name: p += 1
+        Progress.append(stages[p])    
+    ProgressFreq = [Progress.count(s)/Nsims for s in stages]
+    assert np.isclose( np.sum(ProgressFreq),1.,atol=0.001,rtol=0.0)
+    ProgressFreq = 1-np.cumsum(ProgressFreq)
+    Progress = (teamname,ProgressFreq[0],ProgressFreq[1],ProgressFreq[2],ProgressFreq[3],ProgressFreq[4]) 
+    data = {'Team':teamname,'Rd of 16':ProgressFreq[0],'Quarter finals':ProgressFreq[1],'SemiFinals':ProgressFreq[2],'Final':ProgressFreq[3],'WC':ProgressFreq[4]}
+    dataframe = pd.DataFrame(data,index=[1])
+    if verbose:
+        print("%s: %1.2f,%1.2f,%1.2f,%1.2f,%1.2f" % Progress)
+    return dataframe
+
+def team_url(team_id):
+    url = f"https://images.fotmob.com/image_resources/logo/teamlogo/{team_id:.0f}.png"
+#   np.array(PIL.Image.open(urllib.request.urlopen(url)))
+    urllib.request.urlretrieve(url, f"Images/{team_id:.0f}.jpg")
+    return(f"Images/{team_id:.0f}.jpg")
+
+def expected_table(sims,teamnames,group_names,teamdata,save=True):
+    Codes = SetCodes()
+    
+    Tables = [pd.DataFrame(ExpectedGroupFinishes(sims,group_names,group),columns=["Team","1st Prob","2nd Prob","3rd Prob","4th Prob"]) for group in group_names]
+    data = pd.DataFrame()
+    for t in teamnames:
+        data=pd.concat([data,TraceTeam_daniel(sims,t)],ignore_index=True)
+    
+    df=teamdata.merge(pd.concat(Tables,ignore_index=True),on='Team').merge(data,on='Team').round(2).sort_values('Final',ascending=False).reset_index(drop=True)
+    country_to_flagpath = {x: team_url(Codes[x]) for x in set(df["Team"])}
+    df.insert(0, "Flag", df["Team"].apply(lambda x: country_to_flagpath.get(x)))
+    df.set_index("Team",inplace=True)
+
+    df=df[['Flag','Group','Elo', 'Moving goals for', 'Moving goals against',
+       '1st Prob', '2nd Prob', '3rd Prob', '4th Prob', 'Rd of 16',
+       'Quarter finals', 'SemiFinals', 'Final', 'WC']]
+    df["Elo"]=df["Elo"].astype(int)
+        
+    cmap = LinearSegmentedColormap.from_list(
+        name="bugw", colors=["#ffffff", "#f2fbd2", "#c9ecb4", "#93d3ab", "#35b0ab"], N=256
+    )
+
+    col_defs = (
+    [
+        ColumnDefinition(name="Flag",title="",textprops={"ha": "center"},width=0.5,plot_fn=circled_image,),
+       ColumnDefinition(name="Team",textprops={"ha": "left", "weight": "bold"},width=1.5,), 
+       ColumnDefinition(name="Group",textprops={"ha": "center"},width=0.75,),
+       ColumnDefinition(name="Elo",group="Team Rating",textprops={"ha": "center"},width=0.75,),
+       ColumnDefinition(name="Moving goals for",title="Goals \n for",width=0.75,textprops={"ha": "center","bbox": {"boxstyle": "circle", "pad": 0.35},},cmap=normed_cmap(df["Moving goals for"], cmap=matplotlib.cm.PiYG, num_stds=2.5),group="Team Rating",),
+       ColumnDefinition(name="Moving goals against",title="Goals \n against",width=0.75,textprops={"ha": "center","bbox": {"boxstyle": "circle", "pad": 0.35},},cmap=normed_cmap(df["Moving goals against"], cmap=matplotlib.cm.PiYG_r, num_stds=2.5),group="Team Rating",),
+       ColumnDefinition(name="1st Prob",formatter=decimal_to_percent,group="Group Stage Chances",border="left",),
+       ColumnDefinition(name="2nd Prob",formatter=decimal_to_percent,group="Group Stage Chances",border="left",),
+#       ColumnDefinition(name="3rd Prob",formatter=decimal_to_percent,group="Group Stage Chances",border="left",),
+#       ColumnDefinition(name="4th Prob",formatter=decimal_to_percent,group="Group Stage Chances",border="left",),
+       ColumnDefinition(name="Rd of 16",title="Make \n Rd of 16",formatter=decimal_to_percent,cmap=cmap,group="Knockout Stage Chances",border="left",),
+       ColumnDefinition(name="Quarter finals",title="Make \n Quarters",formatter=decimal_to_percent,cmap=cmap,group="Knockout Stage Chances",border="left",),
+       ColumnDefinition(name="Final",title="Make \n Finals",formatter=decimal_to_percent,cmap=cmap,group="Knockout Stage Chances",border="left",),
+       ColumnDefinition(name="WC",formatter=decimal_to_percent,cmap=cmap,group="Knockout Stage Chances",border="left",),
+       ColumnDefinition(name="SemiFinals",title="Make \n Semis",formatter=decimal_to_percent,cmap=cmap,group="Knockout Stage Chances",border="left",)
+    ])
+
+    fig, ax = plt.subplots(figsize=(15, 27))
+    table = Table(
+        df.drop(columns=["3rd Prob","4th Prob"]),
+        column_definitions=col_defs,
+        row_dividers=True,
+        footer_divider=True,
+        ax=ax,
+        textprops={"fontsize": 14},
+        row_divider_kw={"linewidth": 1, "linestyle": (0, (1, 5))},
+        col_label_divider_kw={"linewidth": 1, "linestyle": "-"},
+        column_border_kw={"linewidth": 1, "linestyle": "-"},
+    ).autoset_fontcolors(colnames=["Moving goals for", "Moving goals against"])
+    if save:
+        fig.savefig("Plots/wwc_table.png", facecolor=ax.get_facecolor(), dpi=200)
+
+
+def expectedGroups(sims,group_names,teamdata,save=True):
+    cmap = LinearSegmentedColormap.from_list(
+        name="bugw", colors=["#ffffff", "#f2fbd2", "#c9ecb4", "#93d3ab", "#35b0ab"], N=256
+    )
+
+    Codes = SetCodes()
+    Tables = [pd.DataFrame(ExpectedGroupFinishes(sims,group_names,group),columns=["Team","1st Prob","2nd Prob","3rd Prob","4th Prob"]) for group in group_names]
+    col_defs = (
+        [
+            ColumnDefinition(name="Flag",title="",textprops={"ha": "center"},width=0.5,plot_fn=circled_image,),
+            ColumnDefinition(name="Team",textprops={"ha": "left", "weight": "bold"},width=1.5,), 
+            ColumnDefinition(name="Group",textprops={"ha": "center"},width=0.75,),
+            ColumnDefinition(name="Elo",textprops={"ha": "center"},width=0.75,),
+            ColumnDefinition(name="1st Prob",formatter=decimal_to_percent,group="Group Stage Chances",border="left",cmap=cmap),
+            ColumnDefinition(name="2nd Prob",formatter=decimal_to_percent,group="Group Stage Chances",border="left",cmap=cmap),
+            ColumnDefinition(name="3rd Prob",formatter=decimal_to_percent,group="Group Stage Chances",border="left",cmap=cmap),
+            ColumnDefinition(name="4th Prob",formatter=decimal_to_percent,group="Group Stage Chances",border="left",cmap=cmap),
+            ColumnDefinition(name="Qual",formatter=decimal_to_percent,border="left",cmap=cmap)
+        ]
+    )
+
+    fig,axes = plt.subplots(nrows=4,ncols=2,figsize=(22, 17))
+    plt.subplots_adjust(left=None, bottom=None, right=None, top=None,
+                    wspace=0.05, hspace=0.05)
+
+    for table,ax in zip(Tables,axes.flatten()):
+            df=table.copy()
+            df['Qual']=df.iloc[:,[1,2]].sum(axis=1)
+            df=teamdata[["Team","Elo"]].merge(df,on='Team',how='right').round(2).sort_values('Qual',ascending=False).reset_index(drop=True)
+            country_to_flagpath = {x: team_url(Codes[x]) for x in set(df["Team"])}
+            df.insert(0, "Flag", df["Team"].apply(lambda x: country_to_flagpath.get(x)))
+            df["Elo"]=df["Elo"].astype(int)
+            df=df.set_index("Team")
+            table = Table(
+                    df,
+                    column_definitions=col_defs,
+                    row_dividers=True,
+                    footer_divider=True,
+                    ax=ax,
+                    textprops={"fontsize": 14},
+                    row_divider_kw={"linewidth": 1, "linestyle": (0, (1, 5))},
+                    col_label_divider_kw={"linewidth": 1, "linestyle": "-"},
+                    column_border_kw={"linewidth": 1, "linestyle": "-"},)
+    if save:
+        fig.savefig("Plots/groups_table.png", facecolor=ax.get_facecolor(), dpi=200)
+
+def expectedGroup(sims,group,group_names,teamdata,save=True):
+    cmap = LinearSegmentedColormap.from_list(
+        name="bugw", colors=["#ffffff", "#f2fbd2", "#c9ecb4", "#93d3ab", "#35b0ab"], N=256
+    )
+
+    Codes = SetCodes()
+    table = pd.DataFrame(ExpectedGroupFinishes(sims,group_names,group),columns=["Team","1st Prob","2nd Prob","3rd Prob","4th Prob"])
+    col_defs = (
+        [
+            ColumnDefinition(name="Flag",title="",textprops={"ha": "center"},width=0.5,plot_fn=circled_image,),
+            ColumnDefinition(name="Team",textprops={"ha": "left", "weight": "bold"},width=1.5,), 
+            ColumnDefinition(name="Group",textprops={"ha": "center"},width=0.75,),
+            ColumnDefinition(name="Elo",textprops={"ha": "center"},width=0.75,),
+            ColumnDefinition(name="1st Prob",formatter=decimal_to_percent,group="Group Stage Chances",border="left",cmap=cmap),
+            ColumnDefinition(name="2nd Prob",formatter=decimal_to_percent,group="Group Stage Chances",border="left",cmap=cmap),
+            ColumnDefinition(name="3rd Prob",formatter=decimal_to_percent,group="Group Stage Chances",border="left",cmap=cmap),
+            ColumnDefinition(name="4th Prob",formatter=decimal_to_percent,group="Group Stage Chances",border="left",cmap=cmap),
+            ColumnDefinition(name="Qual",formatter=decimal_to_percent,border="left",cmap=cmap)
+        ]
+    )
+
+    fig,ax = plt.subplots(figsize=(10, 4))
+    plt.subplots_adjust(left=None, bottom=None, right=None, top=None,
+                    wspace=0.05, hspace=0.05)
+
+    
+    df=table.copy()
+    df['Qual']=df.iloc[:,[1,2]].sum(axis=1)
+    df=teamdata[["Team","Elo"]].merge(df,on='Team',how='right').round(2).sort_values('Qual',ascending=False).reset_index(drop=True)
+    country_to_flagpath = {x: team_url(Codes[x]) for x in set(df["Team"])}
+    df.insert(0, "Flag", df["Team"].apply(lambda x: country_to_flagpath.get(x)))
+    df["Elo"]=df["Elo"].astype(int)
+    df=df.set_index("Team")
+    table = Table(
+                df,
+                column_definitions=col_defs,
+                row_dividers=True,
+                footer_divider=True,
+                ax=ax,
+                textprops={"fontsize": 14},
+                row_divider_kw={"linewidth": 1, "linestyle": (0, (1, 5))},
+                col_label_divider_kw={"linewidth": 1, "linestyle": "-"},
+                column_border_kw={"linewidth": 1, "linestyle": "-"},)
+    if save:
+        fig.savefig(f"Plots/group_table_{group}.png", facecolor=ax.get_facecolor(), dpi=200)
 def simstats(sims): 
     # print some useful tournament stats
     print("Interesting simulation stats:")

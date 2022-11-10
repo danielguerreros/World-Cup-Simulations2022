@@ -20,7 +20,7 @@ def get_WorldCup2022_data():
                     
 # ************ Simulations Parameters ***************
 hostname = 'Qatar'
-Nsims = 100 # number of tournament simulations to run
+Nsims = 10# number of tournament simulations to run
 verbose = False # set to true to print outcome of all matches and group tables in each sim iteration
 savePlots = True # plots saved in same directory
 
@@ -46,7 +46,7 @@ for i in range(0,Nsims):
     s.runsim() 
     sims.append(copy.deepcopy(s))
 
-    if i>0 and i % 5 == 0: 
+    if i>0 and i % 10 == 0: 
         print("               %s sims done" % (i))
 
 # ************ Plots & Statistics ***************
@@ -54,9 +54,18 @@ print("generating plots and statistics")
 met.SimWinners(sims,teamnames, save=savePlots)
 met.ExpectedGroupFinishesPlot(sims,group_names, save=savePlots)
 met.makeProgressPlot( sims, teamnames, save=savePlots )
-
+met.expected_table(sims,teamnames,group_names,teamdata)
+met.expectedGroups(sims,group_names,teamdata,save=savePlots)
+met.expectedGroup(sims,"A",group_names,teamdata,save=savePlots)
+met.expectedGroup(sims,"B",group_names,teamdata,save=savePlots)
+met.expectedGroup(sims,"C",group_names,teamdata,save=savePlots)
+met.expectedGroup(sims,"D",group_names,teamdata,save=savePlots)
+met.expectedGroup(sims,"E",group_names,teamdata,save=savePlots)
+met.expectedGroup(sims,"F",group_names,teamdata,save=savePlots)
+met.expectedGroup(sims,"G",group_names,teamdata,save=savePlots)
+met.expectedGroup(sims,"H",group_names,teamdata,save=savePlots)
 # Print some interesting tournament predictions
-met.simstats(sims)
+#met.simstats(sims)
 
 print("done")
 
