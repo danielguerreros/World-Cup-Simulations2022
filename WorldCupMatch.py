@@ -10,6 +10,11 @@ import scipy.stats
 import numpy as np
 import pandas as pd
 from statsmodels.iolib.smpickle import load_pickle
+from scipy.stats import poisson
+from matplotlib.colors import LinearSegmentedColormap
+import matplotlib.pyplot as plt
+from matplotlib.gridspec import GridSpec
+import seaborn as sns
 
 modelo_poisson = load_pickle("Prediction Model/international_model.pickle")
 class WorldCupMatch(object):
@@ -91,7 +96,77 @@ class WorldCupMatch(object):
         if verbose:
             print("Elos: %1.1f, %1.1f" % (self.team1.elorank,self.team2.elorank))
 
+    def generate_probabilities(self):
+        # Elo differences, including home advantage effect
+        elo_diff = self.team1.elorank - self.team2.elorank
+        
+        #if self.model=="Elo":
+        mu1 =  modelo_poisson.predict(pd.DataFrame(data={'mov_score_for': self.team1.moving_for,  'mov_score_against': self.team1.moving_against,'mov_score_against_rival':self.team2.moving_against,'home':int(self.team1.host),"Elo_diff":elo_diff},index=[1])).values[0]
+        mu2 =  modelo_poisson.predict(pd.DataFrame(data={'mov_score_for': self.team2.moving_for,  'mov_score_against': self.team2.moving_against,'mov_score_against_rival':self.team1.moving_against,'home':int(self.team2.host),"Elo_diff":-elo_diff},index=[1])).values[0]
+        # Draw goals from Poisson distribution
+        
+        team_pred = [[poisson.pmf(i, team_avg) for i in range(0, 6)] for team_avg in [mu1, mu2]]
+        return(np.outer(np.array(team_pred[0]), np.array(team_pred[1])))
 
+    
+    def generate_probability_plot(self,save=True):
+        partido=self.generate_probabilities()
+        local = self.team1.name
+        visitante = self.team2.name
+        series=pd.Series([1-np.sum(np.triu(partido, 1))-np.sum(np.diag(partido)),np.sum(np.diag(partido)),np.sum(np.triu(partido, 1))],index=[f'{local}','Draw',f'{visitante}'])
+
+        color_xpecta='#7ee1bd'
+        myColor=LinearSegmentedColormap.from_list("mio",['#FFFFFF',color_xpecta],N=100)
+
+        fig = plt.figure(figsize=(6, 7))
+        gs = GridSpec(nrows=3, ncols=2, width_ratios=[3, 1], height_ratios=[1, 4, 1])   
+
+        # First axes
+        ax0 = fig.add_subplot(gs[1, 0])
+        g3 = sns.heatmap(partido*100,cbar=False,annot=True,fmt = '.1f',square=1,cmap=myColor,ax=ax0)
+        for t in ax0.texts: t.set_text(t.get_text() + " %")
+        ax0.set_xlabel(f"{visitante}")
+        ax0.set_ylabel(f"{local}")
+
+        # Second axes
+        ax1 = fig.add_subplot(gs[0, 0])
+        ax1.bar([n for n in range(6)],partido.sum(axis=0)*100,color=color_xpecta)
+        #ax1.set_yticks(np.arange(len(partido.sum(axis=0)*100)))
+        ax1.set_axisbelow(True)
+        ax1.grid(axis='y')
+
+
+        # Third axes
+        ax2 = fig.add_subplot(gs[1, 1])
+        ax2.barh([n for n in range(6)],partido.sum(axis=1)*100,color=color_xpecta)
+        ax2.set_axisbelow(True)
+        ax2.grid(axis='x')
+        ax2.invert_yaxis()
+
+
+        ax3 = fig.add_subplot(gs[2, :])
+        np.round(pd.DataFrame(series).T*100,2).plot.barh(stacked=True,ax=ax3)
+        ax3.axis('off')
+        ax3.legend(loc='upper center', bbox_to_anchor=(0.5, 0.3),ncol=3,frameon=False)
+        
+        for p in ax3.patches:
+            left, bottom, width, height = p.get_bbox().bounds
+            if width > 0:
+                ax3.annotate(f'{width:0.0f}%', xy=(left+width/2, bottom+height/2), ha='center', va='center',color='black')
+
+        ax4 = fig.add_subplot(gs[0,1])
+        #ax4.imshow("Images/5796.jpg")
+        ax4.axis('off')
+
+
+        plt.suptitle(f"Probabilidades {local} vs {visitante} ",y=0.92,fontsize=14)
+        plt.figtext(0.62,0.1, f"Ganador más probable: {series.idxmax()} ({np.round(series.max()*100,1)}%)", ha="right", va="top", fontsize=12, color="w")
+        plt.figtext(0.612,0.06, "Resultado más probable:"+f" {np.argmax(np.max(partido, axis=1))}-{np.argmax(np.max(partido, axis=0))} ({np.round(partido[np.argmax(np.max(partido, axis=1))][np.argmax(np.max(partido, axis=0))]*100,1)}%)", ha="right", va="top", fontsize=12, color="w")
+        plt.figtext(0.5,0.01, "Modelo y Visualización: @damaguesan", ha="left", va="top", fontsize=9, color="w")
+
+        if save:
+            fig.savefig(f"Plots/{local}{visitante}Probability.png",  dpi=200) 
+            
     def update_elo_scores_ELORATING(self, goal_diff, elo_diff):
         # see http://www.eloratings.net/about
         if np.abs( goal_diff ) == 2:
